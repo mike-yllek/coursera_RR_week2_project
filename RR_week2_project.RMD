@@ -1,0 +1,155 @@
+---
+title: "RR_Week2_Project"
+author: "MSK"
+date: "8/27/2021"
+output: html_document
+---
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Reproducible Research Project 1
+
+## Loading and Preprocessing Data
+
+### Libraries
+
+Start by loading all appropriate libraries into R
+
+```{r, echo = TRUE}
+libraries <- c("ggplot2", "lubridate", "plyr", "dplyr", "stats")
+
+for(i in 1:length(libraries)) {
+    library(libraries[i], character.only = TRUE)
+}
+
+```
+
+### Load data
+Load the data into R and perform basic exploratory data analysis. 
+
+```{r, echo = TRUE}
+act_data <- read.csv("/Users/mikekelly/Documents/R_files/Coursera_R_Projects/Reproducible_Research/activity.csv")
+
+str(act_data)
+summary(act_data)
+```
+
+### Transform data 
+We will need to make the date variable into a date class in R. The interval variable needs to become a factor as well. 
+
+```{r, echo = TRUE}
+act_data$date <- ymd(act_data$date)
+act_data$interval <- as.factor(act_data$interval)
+```
+
+## What is mean total number of steps taken per day?
+
+We will need to aggregate by date interval to get the sum of the steps per day and the average of the steps per five minute interval. 
+
+```{r, echo = TRUE}
+steps_per_day <- aggregate(steps ~ date, data = act_data, FUN = sum, na.action = na.omit)
+steps_per_interval_mean <- aggregate(steps ~ interval, data = act_data, FUN = mean, na.action = na.omit)
+```
+
+### Histogram of total steps per day
+
+```{r, echo = TRUE}
+median_steps_per_day = median(steps_per_day$steps)
+mean_steps_per_day = mean(steps_per_day$steps)
+
+histplot_steps_per_day <- ggplot(data = steps_per_day, mapping = aes(steps)) + 
+    geom_histogram(aes(x = steps), bins = 40, color = "black", fill = "salmon", lwd = 0.5) +
+    geom_vline(xintercept = median_steps_per_day, color = "light blue", lwd = 0.5) +
+    geom_vline(xintercept = mean_steps_per_day, color = "dark blue") +
+    geom_text(aes(x = median_steps_per_day, y = 6), label = "Median = 10765", color = "light blue", angle = 90, vjust = -2.0) +
+    geom_text(aes(x = mean_steps_per_day, y = 6), label = "Mean = 10766", color = "dark blue", angle = 90, vjust = 1.2) +
+    xlab("Steps Per Day") + ylab("Frequency") + ggtitle("Histogram of Total Steps Per Day") +
+    theme(plot.title = element_text(hjust = 0.5))
+    
+median_steps_per_day
+mean_steps_per_day
+histplot_steps_per_day
+
+```
+
+## What is the average daily activity pattern?
+### Time series plot of average steps per five minute interval in the day
+
+```{r, echo = TRUE}
+time_series_steps_per_interval_mean <- ggplot(data = steps_per_interval_mean, mapping = aes(x = as.numeric(interval), y = steps)) +
+    geom_line(color = "indianred3") + scale_x_continuous(name = "Time of Day", limits = c(0,288), minor_breaks = seq(0, 288, 12), breaks = c(0, 288/4, 288/4*2, 288/4*3, 288), labels = c("00:00", "06:00", "12:00", "18:00", "24:00")) +
+    ylab("Average Steps Per Five Minute Interval") + ggtitle("Average Steps Per 5 Minute Interval Plotted Against Time of Day", subtitle = "October and November Data")
+
+time_series_steps_per_interval_mean
+
+```
+
+
+## Imputing missing values
+### Count Missing Values
+First we need to see how many missing values we have in each column of the data set. 
+
+```{r, echo = TRUE}
+sapply(act_data, FUN = function(x) sum(is.na(x)))
+```
+
+### Change NA to interval mean
+We will then change all NA values to that of the mean for that interval of the day.
+
+```{r, echo = TRUE}
+act_data_narm <- ddply(.data = act_data, .variables = "interval", transform, steps = ifelse(is.na(steps), mean(steps, na.rm = TRUE), steps))
+```
+
+### Histogram total steps by day
+Once we have the NAs removed, we can complete the same steps above. The mean of this data set does not change (as all NAs were given the mean of the interval) however, the median is now closer to the mean. 
+
+```{r, echo = TRUE}
+
+steps_per_day_narm <- aggregate(steps ~ date, data = act_data_narm, FUN = sum, na.action = na.omit)
+
+median_steps_per_day_narm <- median(steps_per_day_narm$steps)
+mean_steps_per_day_narm <- mean(steps_per_day_narm$steps)
+
+histplot_steps_per_day_narm <- ggplot(data = steps_per_day_narm, mapping = aes(steps)) + 
+    geom_histogram(aes(x = steps), bins = 40, color = "black", fill = "salmon", lwd = 0.5) +
+    geom_vline(xintercept = median_steps_per_day_narm, color = "light blue", lwd = 0.5) +
+    geom_vline(xintercept = mean_steps_per_day_narm, color = "dark blue") +
+    geom_text(aes(x = median_steps_per_day_narm, y = 6), label = "Median = 10766", color = "light blue", angle = 90, vjust = -2.0) +
+    geom_text(aes(x = mean_steps_per_day_narm, y = 6), label = "Mean = 10766", color = "dark blue", angle = 90, vjust = 2.0) +
+    xlab("Steps Per Day") + ylab("Frequency") + ggtitle("Histogram of Total Steps Per Day") +
+    theme(plot.title = element_text(hjust = 0.5))
+
+median_steps_per_day_narm
+mean_steps_per_day_narm
+histplot_steps_per_day_narm 
+
+```
+
+## Are there differences in activity patterns between weekdays and weekends?
+### Add variable weekdays
+We first need to create the variable weekends. 
+```{r, echo = TRUE}
+act_data_narm_weekday <- mutate(act_data_narm,
+                                 weekday = as.factor(case_when(
+                                     weekdays(act_data_narm$date) %in% c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday") ~ "Weekday",
+                                     weekdays(act_data_narm$date) %in% c("Saturday", "Sunday") ~ "Weekend",
+                                     TRUE ~ "NA")))
+```
+
+### Time series plot by weekend vs weekday
+We can then ammend the code from above to add color by weekday versus weekend to see differences based on this new variable. 
+
+```{r, echo = TRUE}
+steps_per_interval_mean_weekday <- aggregate(steps ~ interval + weekday, data = act_data_narm_weekday, FUN = mean, na.action = na.omit)
+
+time_series_steps_per_interval_mean_weekday <- ggplot(data = steps_per_interval_mean_weekday, mapping = aes(x = as.numeric(interval), y = steps, color = weekday)) +
+    geom_line() + scale_x_continuous(name = "Time of Day", limits = c(0,288), minor_breaks = seq(0, 288, 12), breaks = c(0, 288/4, 288/4*2, 288/4*3, 288), labels = c("00:00", "06:00", "12:00", "18:00", "24:00")) +
+    ylab("Average Steps Per Five Minute Interval") + ggtitle("Average Steps Per 5 Minute Interval Plotted Against Time of Day", subtitle = "October and November Data")
+
+time_series_steps_per_interval_mean_weekday
+```
+
+
+
